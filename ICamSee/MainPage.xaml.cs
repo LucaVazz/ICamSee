@@ -1,33 +1,20 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices.WindowsRuntime;
-using Windows.Foundation;
-using Windows.Foundation.Collections;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Controls.Primitives;
-using Windows.UI.Xaml.Data;
-using Windows.UI.Xaml.Input;
-using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
-
-using System.Threading.Tasks;         // Used to implement asynchronous methods
-using Windows.Devices.Enumeration;    // Used to enumerate cameras on the device
-using Windows.Devices.Sensors;        // Orientation sensor is used to rotate the camera preview
-using Windows.Graphics.Display;       // Used to determine the display orientation
-using Windows.Graphics.Imaging;       // Used for encoding captured images
-using Windows.Media;                  // Provides SystemMediaTransportControls
-using Windows.Media.Capture;          // MediaCapture APIs
-using Windows.Media.MediaProperties;  // Used for photo and video encoding
-using Windows.Storage;                // General file I/O
-using Windows.Storage.FileProperties; // Used for image file encoding
-using Windows.Storage.Streams;        // General file I/O
-using Windows.System.Display;         // Used to keep the screen awake during preview and capture
-using Windows.UI.Core;                // Used for updating UI from within async operations
+using System.Threading.Tasks;
+using Windows.Devices.Enumeration;
+using Windows.Devices.Sensors;
+using Windows.Graphics.Display;
+using Windows.Media;
+using Windows.Media.Capture;
+using Windows.System.Display;
+using Windows.UI.Core;
 using System.Diagnostics;
 using Windows.UI.Popups;
+using Windows.ApplicationModel;
+
 
 
 namespace ICamSee
@@ -35,29 +22,41 @@ namespace ICamSee
     public sealed partial class MainPage : Page
     {
         private readonly DisplayRequest _displayRequest = new DisplayRequest(); 
-            // prevent the display from turning off while on this page
-
+            // used later to prevent the display from turning off while on this page
+        
         private MediaCapture _mediaCapture;
+
+        // app states:
         private bool _isInitialized;
         private bool _isPreviewing;
-        private bool _isRecording;
         private bool _externalCamera;
         private bool _mirroringPreview;
 
-        private readonly DisplayInformation _displayInformation = DisplayInformation.GetForCurrentView();
-        private DisplayOrientations _displayOrientation = DisplayOrientations.Portrait;
+        // rotation stuff
+        private readonly DisplayInformation _displayInformation 
+            = DisplayInformation.GetForCurrentView();
+        private DisplayOrientations _displayOrientation 
+            = DisplayOrientations.Portrait;
+        private readonly SimpleOrientationSensor _orientationSensor 
+            = SimpleOrientationSensor.GetDefault();
+        private SimpleOrientation _deviceOrientation 
+            = SimpleOrientation.NotRotated;
+        private static readonly Guid RotationKey 
+            = new Guid("C380465D-2271-428C-9B83-ECEA3B4A85C1");
 
-        private readonly SimpleOrientationSensor _orientationSensor = SimpleOrientationSensor.GetDefault();
-        private SimpleOrientation _deviceOrientation = SimpleOrientation.NotRotated;
-
-        private static readonly Guid RotationKey = new Guid("C380465D-2271-428C-9B83-ECEA3B4A85C1");
+        // handles minimizing/restoring of the app's window
+        private readonly SystemMediaTransportControls _systemMediaControls 
+            = SystemMediaTransportControls.GetForCurrentView();
 
 
         public MainPage()
         {
             this.InitializeComponent();
-
             this.InitializeCameraAsync();
+
+            // register lifecycle-events
+            Application.Current.Suspending  += Application_Suspending;
+            Application.Current.Resuming    += Application_Resuming;
         }
 
 
@@ -186,17 +185,13 @@ namespace ICamSee
             _displayInformation.OrientationChanged -= DisplayInformation_OrientationChanged;
         }
 
-        private async void OrientationSensor_OrientationChanged(SimpleOrientationSensor sender, 
+        private void OrientationSensor_OrientationChanged(SimpleOrientationSensor sender, 
             SimpleOrientationSensorOrientationChangedEventArgs args)
         {
             if (args.Orientation != SimpleOrientation.Faceup 
                 && args.Orientation != SimpleOrientation.Facedown)
             {
                 _deviceOrientation = args.Orientation;
-                if (_isPreviewing)
-                {
-                    await SetPreviewRotationAsync();
-                }
             }
         }
 
@@ -262,6 +257,115 @@ namespace ICamSee
             var props = _mediaCapture.VideoDeviceController.GetMediaStreamProperties(MediaStreamType.VideoPreview);
             props.Properties.Add(RotationKey, rotationDegrees);
             await _mediaCapture.SetEncodingPropertiesAsync(MediaStreamType.VideoPreview, props, null);
+        }
+        #endregion
+
+
+        #region all of them lifecycle
+        private async Task StopPreviewAsync()
+        {
+            try
+            {
+                _isPreviewing = false;
+                await _mediaCapture.StopPreviewAsync();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Exception when stopping the preview: {0}", ex.ToString());
+            }
+
+            // necessary because of the possibility of cross-calls from non-ui threads
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+            {
+                // Cleanup the UI
+                this.capturePreview.Source = null;
+
+                // allow the device to sleep again
+                _displayRequest.RequestRelease();
+            });
+        }
+
+        private async Task CleanupCameraAsync()
+        {
+            if (_isInitialized)
+            {
+                if (_isPreviewing)
+                {
+                    await StopPreviewAsync();
+                }
+
+                _isInitialized = false;
+            }
+
+            if (_mediaCapture != null)
+            {
+                _mediaCapture.Dispose();
+                _mediaCapture = null;
+            }
+        }
+
+        private async void Application_Suspending(object sender, SuspendingEventArgs e)
+        {
+            // we only care if this page is currently active
+            if (Frame.CurrentSourcePageType == typeof(MainPage))
+            {
+                // the system shall wait until we tell it specifically that we are finished
+                //   (becasue the clenaup happens async)
+                var deferral = e.SuspendingOperation.GetDeferral();
+
+                UnregisterOrientationEventHandlers();
+                _systemMediaControls.PropertyChanged -= SystemMediaControls_PropertyChanged;
+                await CleanupCameraAsync();
+
+                deferral.Complete();
+            }
+        }
+
+        private async void Application_Resuming(object sender, object o)
+        {
+            // we only care if this page is currently active
+            if (Frame.CurrentSourcePageType == typeof(MainPage))
+            {
+                RegisterOrientationEventHandlers();
+                _systemMediaControls.PropertyChanged += SystemMediaControls_PropertyChanged;
+
+                await InitializeCameraAsync();
+            }
+        }
+
+        protected override async void OnNavigatedTo(NavigationEventArgs e)
+        {
+            RegisterOrientationEventHandlers();
+            _systemMediaControls.PropertyChanged += SystemMediaControls_PropertyChanged;
+            //await InitializeCameraAsync();
+        }
+
+        protected override async void OnNavigatingFrom(NavigatingCancelEventArgs e)
+        {
+            UnregisterOrientationEventHandlers();
+            _systemMediaControls.PropertyChanged -= SystemMediaControls_PropertyChanged;
+            await CleanupCameraAsync();
+        }
+
+        // handle when the app's window gets minimzed / restored
+        private async void SystemMediaControls_PropertyChanged(SystemMediaTransportControls sender, SystemMediaTransportControlsPropertyChangedEventArgs args)
+        {
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, async () =>
+            {
+                // we only care if this page is currently active
+                if (args.Property == SystemMediaTransportControlsProperty.SoundLevel && Frame.CurrentSourcePageType == typeof(MainPage))
+                {
+                    // if the sound gets muted, the window is getting minimized
+                    if (sender.SoundLevel == SoundLevel.Muted)
+                    {
+                        await CleanupCameraAsync();
+                    }
+                    else if (!_isInitialized)
+                    {
+                        await InitializeCameraAsync();
+                    }
+                }
+            });
         }
         #endregion
 
