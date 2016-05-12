@@ -59,7 +59,7 @@ namespace ICamSee
             Application.Current.Resuming    += Application_Resuming;
         }
 
-
+        #region Initialisation and Deinitialisation
         private async Task InitializeCameraAsync()
         {
             if (_mediaCapture == null)
@@ -69,7 +69,8 @@ namespace ICamSee
                     await DeviceInformation.FindAllAsync(DeviceClass.VideoCapture);
 
                 // Get the camera
-                DeviceInformation cameraDevice = allVideoDevices.FirstOrDefault();
+                DeviceInformation cameraDevice = allVideoDevices.ElementAt(2);
+                    //.FirstOrDefault();
 
                 if (cameraDevice == null)
                 {
@@ -158,6 +159,51 @@ namespace ICamSee
                 await SetPreviewRotationAsync();
             }
         }
+
+        private async Task StopPreviewAsync()
+        {
+            try
+            {
+                _isPreviewing = false;
+                await _mediaCapture.StopPreviewAsync();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Exception when stopping the preview: {0}", ex.ToString());
+            }
+
+            // necessary because of the possibility of cross-calls from non-ui threads
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+            {
+                // clean the UI
+                this.capturePreview.Source = null;
+                this.capturePreview.Visibility = Visibility.Collapsed;
+                this.noiseImage.Visibility = Visibility.Visible;
+
+                // allow the device to sleep again
+                _displayRequest.RequestRelease();
+            });
+        }
+
+        private async Task CleanupCameraAsync()
+        {
+            if (_isInitialized)
+            {
+                if (_isPreviewing)
+                {
+                    await StopPreviewAsync();
+                }
+
+                _isInitialized = false;
+            }
+
+            if (_mediaCapture != null)
+            {
+                _mediaCapture.Dispose();
+                _mediaCapture = null;
+            }
+        }
+        #endregion
 
 
         #region handle changes in the device's orientation
@@ -262,48 +308,6 @@ namespace ICamSee
 
 
         #region all of them lifecycle
-        private async Task StopPreviewAsync()
-        {
-            try
-            {
-                _isPreviewing = false;
-                await _mediaCapture.StopPreviewAsync();
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("Exception when stopping the preview: {0}", ex.ToString());
-            }
-
-            // necessary because of the possibility of cross-calls from non-ui threads
-            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
-            {
-                // Cleanup the UI
-                this.capturePreview.Source = null;
-
-                // allow the device to sleep again
-                _displayRequest.RequestRelease();
-            });
-        }
-
-        private async Task CleanupCameraAsync()
-        {
-            if (_isInitialized)
-            {
-                if (_isPreviewing)
-                {
-                    await StopPreviewAsync();
-                }
-
-                _isInitialized = false;
-            }
-
-            if (_mediaCapture != null)
-            {
-                _mediaCapture.Dispose();
-                _mediaCapture = null;
-            }
-        }
-
         private async void Application_Suspending(object sender, SuspendingEventArgs e)
         {
             // we only care if this page is currently active
@@ -333,11 +337,10 @@ namespace ICamSee
             }
         }
 
-        protected override async void OnNavigatedTo(NavigationEventArgs e)
+        protected override void OnNavigatedTo(NavigationEventArgs e)
         {
             RegisterOrientationEventHandlers();
             _systemMediaControls.PropertyChanged += SystemMediaControls_PropertyChanged;
-            //await InitializeCameraAsync();
         }
 
         protected override async void OnNavigatingFrom(NavigatingCancelEventArgs e)
