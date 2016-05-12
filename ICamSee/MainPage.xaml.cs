@@ -69,7 +69,7 @@ namespace ICamSee
                     await DeviceInformation.FindAllAsync(DeviceClass.VideoCapture);
 
                 // Get the camera
-                DeviceInformation cameraDevice = allVideoDevices.ElementAt(2);
+                DeviceInformation cameraDevice = allVideoDevices.ElementAt(0);
                     //.FirstOrDefault();
 
                 if (cameraDevice == null)
@@ -332,7 +332,6 @@ namespace ICamSee
             {
                 RegisterOrientationEventHandlers();
                 _systemMediaControls.PropertyChanged += SystemMediaControls_PropertyChanged;
-
                 await InitializeCameraAsync();
             }
         }
@@ -369,6 +368,23 @@ namespace ICamSee
                     }
                 }
             });
+        }
+        #endregion
+
+
+        #region click-handlers
+        private async void updateCamera_Click(object sender, RoutedEventArgs e)
+        {
+            // deinitialize
+            UnregisterOrientationEventHandlers();
+            _systemMediaControls.PropertyChanged -= SystemMediaControls_PropertyChanged;
+            await CleanupCameraAsync();
+
+            // re-initialize
+            this.InitializeComponent();
+            RegisterOrientationEventHandlers();
+            _systemMediaControls.PropertyChanged += SystemMediaControls_PropertyChanged;
+            await InitializeCameraAsync();
         }
         #endregion
 

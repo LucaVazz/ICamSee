@@ -14,6 +14,9 @@
     </Page.Resources>
     <Page.TopAppBar>
         <CommandBar>
+            <CommandBar.SecondaryCommands>
+                <AppBarButton Label="refresh the camera" Icon="Refresh" Click="updateCamera_Click"/>
+            </CommandBar.SecondaryCommands>
             <CommandBar.Content>
                 <Grid/>
             </CommandBar.Content>
