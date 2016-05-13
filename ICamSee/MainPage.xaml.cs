@@ -373,7 +373,7 @@ namespace ICamSee
 
 
         #region click-handlers
-        private async void updateCamera_Click(object sender, RoutedEventArgs e)
+        private async void refreshCameraConnection_Click(object sender, RoutedEventArgs e)
         {
             // deinitialize
             UnregisterOrientationEventHandlers();
