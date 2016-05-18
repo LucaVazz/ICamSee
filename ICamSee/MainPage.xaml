@@ -11,6 +11,19 @@
             <MenuFlyoutItem Text="image settings"/>
             <MenuFlyoutItem Text="reading colors"/>
         </MenuFlyout>
+        <Flyout x:Key="FlyoutBase1">
+            <StackPanel VerticalAlignment="Top">
+                <TextBlock x:Name="cameraListLoadIndicator" TextWrapping="Wrap" Text="Loading..." Opacity="0.55" SelectionHighlightColor="#00107C10"/>
+                <ListView x:Name="cameraList" IsItemClickEnabled="True" ItemClick="cameraListItem_Click">
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Name}">
+                            </TextBlock>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </StackPanel>
+        </Flyout>
     </Page.Resources>
     <Page.TopAppBar>
         <CommandBar>
@@ -23,7 +36,7 @@
             <AppBarButton Label="save" Icon="Save"/>
             <AppBarButton Icon="Setting" Label="settings" Flyout="{StaticResource SettingsFlyout}"/>
             <AppBarToggleButton HorizontalAlignment="Stretch" Label="autofocus" VerticalAlignment="Stretch" d:LayoutOverrides="Height" Icon="WebCam"/>
-            <AppBarButton HorizontalAlignment="Stretch" Icon="RotateCamera" Label="switch camera" VerticalAlignment="Stretch" d:LayoutOverrides="Height"/>
+            <AppBarButton HorizontalAlignment="Stretch" Icon="RotateCamera" Label="switch camera" VerticalAlignment="Stretch" d:LayoutOverrides="Height" Flyout="{StaticResource FlyoutBase1}" Click="CameraSwitchOpener_Click"/>
         </CommandBar>
     </Page.TopAppBar>
 

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Navigation;
@@ -16,7 +15,6 @@ using Windows.UI.Popups;
 using Windows.ApplicationModel;
 
 
-
 namespace ICamSee
 {
     public sealed partial class MainPage : Page
@@ -29,8 +27,10 @@ namespace ICamSee
         // app states:
         private bool _isInitialized;
         private bool _isPreviewing;
-        private bool _externalCamera;
-        private bool _mirroringPreview;
+        private bool _isExternalCamera;
+        private bool _isMirroringPreview;
+        private DeviceInformationCollection _videoDevicesCollection;
+        private DeviceInformation _usedVideoDevice;
 
         // rotation stuff
         private readonly DisplayInformation _displayInformation 
@@ -52,37 +52,45 @@ namespace ICamSee
         public MainPage()
         {
             this.InitializeComponent();
-            this.InitializeCameraAsync();
 
             // register lifecycle-events
             Application.Current.Suspending  += Application_Suspending;
             Application.Current.Resuming    += Application_Resuming;
         }
 
-        #region Initialisation and Deinitialisation
+
+        #region Helper-Functions
+        private async Task<DeviceInformationCollection> GetAllVideoDevices()
+        {
+            return await DeviceInformation.FindAllAsync(DeviceClass.VideoCapture);
+        }
+
+        private async void ChangeVideoDeviceAsync(DeviceInformation videoDevice)
+        {
+            await DeinitializeAll();
+
+            _usedVideoDevice = videoDevice;
+            await InitializeCameraAsync();
+            await StartPreviewAsync();
+        }
+        #endregion
+
+
+        #region Initialisation
         private async Task InitializeCameraAsync()
         {
+            if(_usedVideoDevice == null)
+            {
+                throw new Exception("It is not set yet which video-device should be used.");
+            }
+
             if (_mediaCapture == null)
             {
-                // Get available devices for capturing pictures
-                var allVideoDevices = 
-                    await DeviceInformation.FindAllAsync(DeviceClass.VideoCapture);
-
-                // Get the camera
-                DeviceInformation cameraDevice = allVideoDevices.ElementAt(0);
-                    //.FirstOrDefault();
-
-                if (cameraDevice == null)
-                {
-                    Debug.WriteLine("No camera device found.");
-                    return;
-                }
-
                 // Create MediaCapture and initialize it
                 _mediaCapture = new MediaCapture();
                 
                 var mediaInitSettings = new MediaCaptureInitializationSettings {
-                    VideoDeviceId = cameraDevice.Id
+                    VideoDeviceId = _usedVideoDevice.Id
                 };
 
                 try
@@ -98,31 +106,32 @@ namespace ICamSee
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine("Exception when initializing MediaCapture with {0}: {1}", cameraDevice.Id, ex.ToString());
+                    Debug.WriteLine("Exception when initializing MediaCapture with {0}: {1}", 
+                        _usedVideoDevice.Id, ex.ToString());
+                    await new MessageDialog("An error occoured while trying to initialize the camera. Please restart the app and try again.", ":(")
+                        .ShowAsync();
                 }
 
-                // start the live preview
                 if (_isInitialized)
                 {
+                    // set how the cameras live-feed should get mirrored:
                     // Figure out where the camera is located
-                    if (cameraDevice.EnclosureLocation == null 
-                        || cameraDevice.EnclosureLocation.Panel == Windows.Devices.Enumeration.Panel.Unknown)
+                    if (_usedVideoDevice.EnclosureLocation == null 
+                        || _usedVideoDevice.EnclosureLocation.Panel == Windows.Devices.Enumeration.Panel.Unknown)
                     {
                         // It's probably external if we can't get location-info
-                        _externalCamera = true;
+                        _isExternalCamera = true;
                     }
                     else
                     {
-                        _externalCamera = false;
+                        _isExternalCamera = false;
 
                         // Only mirror the preview if the camera is on the front panel
-                        _mirroringPreview = (
-                            cameraDevice.EnclosureLocation.Panel == 
+                        _isMirroringPreview = (
+                            _usedVideoDevice.EnclosureLocation.Panel == 
                                 Windows.Devices.Enumeration.Panel.Front
                         );
-                    }
-
-                    await StartPreviewAsync();                    
+                    }               
                 }
             }
         }
@@ -139,7 +148,7 @@ namespace ICamSee
             // set the preview up
             this.capturePreview.Source = _mediaCapture;
             this.capturePreview.FlowDirection = 
-                _mirroringPreview   ? FlowDirection.RightToLeft 
+                _isMirroringPreview ? FlowDirection.RightToLeft 
                                     : FlowDirection.LeftToRight;
 
             // Start the preview
@@ -151,6 +160,8 @@ namespace ICamSee
             catch (Exception ex)
             {
                 Debug.WriteLine("Exception when starting the preview: {0}", ex.ToString());
+                await new MessageDialog("An error occoured while trying to start the the camera-preview. Please restart the app and try again.", ":(")
+                        .ShowAsync();
             }
 
             // activate orientation-awarness
@@ -158,6 +169,17 @@ namespace ICamSee
             {
                 await SetPreviewRotationAsync();
             }
+        }
+        #endregion
+
+
+        #region Deinitialization
+        private async Task DeinitializeAll()
+        {
+            UnregisterOrientationEventHandlers();
+            _systemMediaControls.PropertyChanged -= SystemMediaControls_PropertyChanged;
+
+            await CleanupCameraAsync();
         }
 
         private async Task StopPreviewAsync()
@@ -218,6 +240,8 @@ namespace ICamSee
 
             _displayInformation.OrientationChanged += DisplayInformation_OrientationChanged;
             _displayOrientation = _displayInformation.CurrentOrientation;
+
+            _systemMediaControls.PropertyChanged += SystemMediaControls_PropertyChanged;
         }
 
         private void UnregisterOrientationEventHandlers()
@@ -229,6 +253,8 @@ namespace ICamSee
             }
 
             _displayInformation.OrientationChanged -= DisplayInformation_OrientationChanged;
+
+            _systemMediaControls.PropertyChanged -= SystemMediaControls_PropertyChanged;
         }
 
         private void OrientationSensor_OrientationChanged(SimpleOrientationSensor sender, 
@@ -286,7 +312,7 @@ namespace ICamSee
         private async Task SetPreviewRotationAsync()
         {
             // external cameras aren't effected by the device's orientation
-            if (_externalCamera)
+            if (_isExternalCamera)
                 return;
 
             _displayOrientation = _displayInformation.CurrentOrientation;
@@ -294,7 +320,7 @@ namespace ICamSee
             int rotationDegrees = ConvertDisplayOrientationToDegrees(_displayOrientation);
 
             // rotation needs to be inverted if the preview is mirrored
-            if (_mirroringPreview)
+            if (_isMirroringPreview)
             {
                 rotationDegrees = (360 - rotationDegrees) % 360;
             }
@@ -310,42 +336,30 @@ namespace ICamSee
         #region all of them lifecycle
         private async void Application_Suspending(object sender, SuspendingEventArgs e)
         {
-            // we only care if this page is currently active
-            if (Frame.CurrentSourcePageType == typeof(MainPage))
-            {
-                // the system shall wait until we tell it specifically that we are finished
-                //   (becasue the clenaup happens async)
-                var deferral = e.SuspendingOperation.GetDeferral();
+            // the system shall wait until we tell it specifically that we are finished
+            //   (becasue the clenaup happens async)
+            var deferral = e.SuspendingOperation.GetDeferral();
 
-                UnregisterOrientationEventHandlers();
-                _systemMediaControls.PropertyChanged -= SystemMediaControls_PropertyChanged;
-                await CleanupCameraAsync();
+            UnregisterOrientationEventHandlers();
+            await CleanupCameraAsync();
 
-                deferral.Complete();
-            }
+            deferral.Complete();
         }
 
         private async void Application_Resuming(object sender, object o)
         {
-            // we only care if this page is currently active
-            if (Frame.CurrentSourcePageType == typeof(MainPage))
-            {
-                RegisterOrientationEventHandlers();
-                _systemMediaControls.PropertyChanged += SystemMediaControls_PropertyChanged;
-                await InitializeCameraAsync();
-            }
+            RegisterOrientationEventHandlers();
+            await InitializeCameraAsync();
         }
 
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
             RegisterOrientationEventHandlers();
-            _systemMediaControls.PropertyChanged += SystemMediaControls_PropertyChanged;
         }
 
         protected override async void OnNavigatingFrom(NavigatingCancelEventArgs e)
         {
             UnregisterOrientationEventHandlers();
-            _systemMediaControls.PropertyChanged -= SystemMediaControls_PropertyChanged;
             await CleanupCameraAsync();
         }
 
@@ -362,6 +376,7 @@ namespace ICamSee
                     {
                         await CleanupCameraAsync();
                     }
+                    // otherwise, it is getting resumed / maximized
                     else if (!_isInitialized)
                     {
                         await InitializeCameraAsync();
@@ -376,18 +391,40 @@ namespace ICamSee
         private async void refreshCameraConnection_Click(object sender, RoutedEventArgs e)
         {
             // deinitialize
-            UnregisterOrientationEventHandlers();
-            _systemMediaControls.PropertyChanged -= SystemMediaControls_PropertyChanged;
-            await CleanupCameraAsync();
+            await DeinitializeAll();
 
             // re-initialize
             this.InitializeComponent();
             RegisterOrientationEventHandlers();
-            _systemMediaControls.PropertyChanged += SystemMediaControls_PropertyChanged;
             await InitializeCameraAsync();
         }
-        #endregion
+        
 
+        private void cameraListItem_Click(object sender, ItemClickEventArgs e)
+        {
+            ChangeVideoDeviceAsync( (DeviceInformation)e.ClickedItem );
+        }
+
+        private async void CameraSwitchOpener_Click(object sender, RoutedEventArgs e)
+        {
+            this.cameraList.Visibility = Visibility.Collapsed;
+            this.cameraListLoadIndicator.Visibility = Visibility.Visible;
+
+            this._videoDevicesCollection = await GetAllVideoDevices();
+            if (this._videoDevicesCollection == null)
+            {
+                await new MessageDialog("No camera found", ":(")
+                        .ShowAsync();
+            }
+            else
+            {
+                this.cameraList.ItemsSource = this._videoDevicesCollection;
+
+                this.cameraListLoadIndicator.Visibility = Visibility.Collapsed;
+                this.cameraList.Visibility = Visibility.Visible;
+            }
+        }
+        #endregion
     }
 
 }
