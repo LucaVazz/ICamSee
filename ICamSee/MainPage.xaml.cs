@@ -59,7 +59,7 @@ namespace ICamSee
         }
 
 
-        #region Helper-Functions
+        #region Camera - Helper-Functions
         private async Task<DeviceInformationCollection> GetAllVideoDevices()
         {
             return await DeviceInformation.FindAllAsync(DeviceClass.VideoCapture);
@@ -72,6 +72,66 @@ namespace ICamSee
             _usedVideoDevice = videoDevice;
             await InitializeCameraAsync();
             await StartPreviewAsync();
+        }
+
+        /// <summary>
+        /// Triggers the video device to zoom in
+        /// </summary>
+        /// <param name="m">a multiplier for the zoom-step of the camera</param>
+        /// <returns>indicates if the zoom-level was changed</returns>
+        private async Task<bool> ZoomIn(int m)
+        {
+            double max  = _mediaCapture.VideoDeviceController.Zoom.Capabilities.Max;
+            double step = _mediaCapture.VideoDeviceController.Zoom.Capabilities.Step;
+
+            double current;
+            if  ( _mediaCapture.VideoDeviceController.Zoom.TryGetValue(out current) )
+            {
+                double next = current + step * m;
+                if ( next > max )
+                {
+                    return false;
+                }
+                else if ( _mediaCapture.VideoDeviceController.Zoom
+                    .TrySetValue(next) )
+                {
+                    return true;
+                }
+            }
+
+            await new MessageDialog("A problem occured while trying to zoom. Please try again.", ":/")
+                        .ShowAsync();
+            return false;
+        }
+
+        /// <summary>
+        /// Triggers the video device to zoom out
+        /// </summary>
+        /// <param name="m">a multiplier for the zoom-step of the camera</param>
+        /// <returns>indicates if the zoom-level was changed</returns>
+        private async Task<bool> ZoomOut(int m)
+        {
+            double min = _mediaCapture.VideoDeviceController.Zoom.Capabilities.Min;
+            double step = _mediaCapture.VideoDeviceController.Zoom.Capabilities.Step;
+
+            double current;
+            if ( _mediaCapture.VideoDeviceController.Zoom.TryGetValue(out current) )
+            {
+                double next = current - step * m;
+                if ( next < min )
+                {
+                    return false;
+                }
+                else if ( _mediaCapture.VideoDeviceController.Zoom
+                    .TrySetValue(next) )
+                {
+                    return true;
+                }
+            }
+
+            await new MessageDialog("A problem occured while trying to zoom. Please try again.", ":/")
+                        .ShowAsync();
+            return false;
         }
         #endregion
 
@@ -133,6 +193,7 @@ namespace ICamSee
                         );
                     }
 
+                    //--- initilize autofocus:
                     if (_mediaCapture.VideoDeviceController.Focus.Capabilities.Supported 
                         && _mediaCapture.VideoDeviceController.Focus.Capabilities.AutoModeSupported)
                     {
@@ -145,6 +206,16 @@ namespace ICamSee
                     else
                     {
                         this.ToggleAutoFocusButton.Visibility = Visibility.Collapsed;
+                    }
+
+                    //--- initialize zooming:
+                    if ( _mediaCapture.VideoDeviceController.Zoom.Capabilities.Supported )
+                    {
+                        this.ZoomCommandbar.Visibility = Visibility.Visible;
+                    }
+                    else
+                    {
+                        this.ZoomCommandbar.Visibility = Visibility.Collapsed;
                     }
                 }
             }
@@ -472,6 +543,16 @@ namespace ICamSee
                         .ShowAsync();
                 }
             }
+        }
+
+        private void ZoomIn_Click(object sender, RoutedEventArgs e)
+        {
+            ZoomIn(310);
+        }
+
+        private void ZoomOut_Click(object sender, RoutedEventArgs e)
+        {
+            ZoomOut(310);
         }
         #endregion
     }

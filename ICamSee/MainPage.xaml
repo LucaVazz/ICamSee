@@ -25,10 +25,10 @@
             </StackPanel>
         </Flyout>
     </Page.Resources>
-    <Page.BottomAppBar x:Name="ZoomAppbar">
-        <CommandBar>
-            <AppBarButton Icon="ZoomIn" Label="appbarbutton" Click="ZoomIn_Clicked"/>
-            <AppBarButton Icon="ZoomOut" Label="appbarbutton" Click="ZoomOut_Clicked"/>
+    <Page.BottomAppBar>
+        <CommandBar x:Name="ZoomCommandbar">
+            <AppBarButton Icon="ZoomIn" Label="zoom in" Click="ZoomIn_Click"/>
+            <AppBarButton Icon="ZoomOut" Label="zoom out" Click="ZoomOut_Click"/>
         </CommandBar>
     </Page.BottomAppBar>
     <Page.TopAppBar>
