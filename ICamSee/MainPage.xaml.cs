@@ -131,7 +131,21 @@ namespace ICamSee
                             _usedVideoDevice.EnclosureLocation.Panel == 
                                 Windows.Devices.Enumeration.Panel.Front
                         );
-                    }               
+                    }
+
+                    if (_mediaCapture.VideoDeviceController.Focus.Capabilities.Supported 
+                        && _mediaCapture.VideoDeviceController.Focus.Capabilities.AutoModeSupported)
+                    {
+                        _mediaCapture.VideoDeviceController.Focus.TrySetAuto(true);
+
+                        this.ToggleAutoFocusButton.Visibility = Visibility.Visible;
+                        this.ToggleAutoFocusButton.IsChecked = true;
+                        this.ToggleAutoFocusButton.Label = "Autofocus is on";
+                    }
+                    else
+                    {
+                        this.ToggleAutoFocusButton.Visibility = Visibility.Collapsed;
+                    }
                 }
             }
         }
@@ -422,6 +436,41 @@ namespace ICamSee
 
                 this.cameraListLoadIndicator.Visibility = Visibility.Collapsed;
                 this.cameraList.Visibility = Visibility.Visible;
+            }
+        }
+
+        private async void ToggleAutoFocus_Click(object sender, RoutedEventArgs e)
+        {
+            bool autoFocusenabled = false;
+            if ( !_mediaCapture.VideoDeviceController.Focus.TryGetAuto(out autoFocusenabled) )
+            {
+                await new MessageDialog("A problem occured while trying to toggle the autofocus. Please try again.", ":/")
+                        .ShowAsync();
+            }
+
+            if ( !autoFocusenabled )
+            {
+                if ( _mediaCapture.VideoDeviceController.Focus.TrySetAuto(true) )
+                {
+                    this.ToggleAutoFocusButton.Label = "Autofocus is on";
+                }
+                else
+                {
+                    await new MessageDialog("A problem occured while trying to turn the autofocus on. Please try again.", ":/")
+                        .ShowAsync();
+                }
+            }
+            else
+            {
+                if ( _mediaCapture.VideoDeviceController.Focus.TrySetAuto(false) )
+                {
+                    this.ToggleAutoFocusButton.Label = "Autofocus is off";
+                }
+                else
+                {
+                    await new MessageDialog("A problem occured while trying to turn the autofocus off. Please try again.", ":/")
+                        .ShowAsync();
+                }
             }
         }
         #endregion

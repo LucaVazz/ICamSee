@@ -25,6 +25,12 @@
             </StackPanel>
         </Flyout>
     </Page.Resources>
+    <Page.BottomAppBar x:Name="ZoomAppbar">
+        <CommandBar>
+            <AppBarButton Icon="ZoomIn" Label="appbarbutton" Click="ZoomIn_Clicked"/>
+            <AppBarButton Icon="ZoomOut" Label="appbarbutton" Click="ZoomOut_Clicked"/>
+        </CommandBar>
+    </Page.BottomAppBar>
     <Page.TopAppBar>
         <CommandBar>
             <CommandBar.SecondaryCommands>
@@ -35,7 +41,7 @@
             </CommandBar.Content>
             <AppBarButton Label="save" Icon="Save"/>
             <AppBarButton Icon="Setting" Label="settings" Flyout="{StaticResource SettingsFlyout}"/>
-            <AppBarToggleButton HorizontalAlignment="Stretch" Label="autofocus" VerticalAlignment="Stretch" d:LayoutOverrides="Height" Icon="WebCam"/>
+            <AppBarToggleButton x:Name="ToggleAutoFocusButton" HorizontalAlignment="Stretch" Label="autofocus" VerticalAlignment="Stretch" d:LayoutOverrides="Height" Icon="WebCam" Click="ToggleAutoFocus_Click"/>
             <AppBarButton HorizontalAlignment="Stretch" Icon="RotateCamera" Label="switch camera" VerticalAlignment="Stretch" d:LayoutOverrides="Height" Flyout="{StaticResource FlyoutBase1}" Click="CameraSwitchOpener_Click"/>
         </CommandBar>
     </Page.TopAppBar>
