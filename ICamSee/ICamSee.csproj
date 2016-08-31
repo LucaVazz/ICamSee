@@ -95,6 +95,9 @@
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>
+    <Compile Include="ICameraViewHelper.cs" />
+    <Compile Include="IMediaCaptureEnhancer.cs" />
+    <Compile Include="IVideoDevicesManager.cs" />
     <Compile Include="MainPage.xaml.cs">
       <DependentUpon>MainPage.xaml</DependentUpon>
     </Compile>
