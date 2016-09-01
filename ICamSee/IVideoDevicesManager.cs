@@ -8,6 +8,6 @@ namespace ICamSee
     {
         Task<DeviceInformationCollection> GetAllAvailableDevicesAsync();
         Task<DeviceInformation> GetDefaultDeviceAsync();
-        void SetUserDefaultDevice();
+        void SetUserDefaultDevice(DeviceInformation device);
     }
 }
