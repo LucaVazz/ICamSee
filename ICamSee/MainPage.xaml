@@ -11,10 +11,10 @@
             <MenuFlyoutItem Text="image settings"/>
             <MenuFlyoutItem Text="reading colors"/>
         </MenuFlyout>
-        <Flyout x:Key="FlyoutBase1">
+        <Flyout x:Key="CamerasFlyout">
             <StackPanel VerticalAlignment="Top">
-                <TextBlock x:Name="cameraListLoadIndicator" TextWrapping="Wrap" Text="Loading..." Opacity="0.55" SelectionHighlightColor="#00107C10"/>
-                <ListView x:Name="cameraList" IsItemClickEnabled="True" ItemClick="cameraListItem_Click">
+                <TextBlock x:Name="CameraListLoadIndicator" TextWrapping="Wrap" Text="Loading..." Opacity="0.55" SelectionHighlightColor="#00107C10"/>
+                <ListView x:Name="CameraList" IsItemClickEnabled="True" ItemClick="CameraList_Click">
                     <ListView.ItemTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding Name}">
@@ -34,15 +34,13 @@
     <Page.TopAppBar>
         <CommandBar>
             <CommandBar.SecondaryCommands>
-                <AppBarButton Label="refresh the camera-connection" Icon="Refresh" Click="refreshCameraConnection_Click"/>
             </CommandBar.SecondaryCommands>
             <CommandBar.Content>
                 <Grid/>
             </CommandBar.Content>
-            <AppBarButton Label="save" Icon="Save"/>
-            <AppBarButton Icon="Setting" Label="settings" Flyout="{StaticResource SettingsFlyout}"/>
+            <AppBarButton Icon="Setting" Label="Settings" Flyout="{StaticResource SettingsFlyout}"/>
             <AppBarToggleButton x:Name="ToggleAutoFocusButton" HorizontalAlignment="Stretch" Label="autofocus" VerticalAlignment="Stretch" d:LayoutOverrides="Height" Icon="WebCam" Click="ToggleAutoFocus_Click"/>
-            <AppBarButton HorizontalAlignment="Stretch" Icon="RotateCamera" Label="switch camera" VerticalAlignment="Stretch" d:LayoutOverrides="Height" Flyout="{StaticResource FlyoutBase1}" Click="CameraSwitchOpener_Click"/>
+            <AppBarButton HorizontalAlignment="Stretch" Label="switch camera" VerticalAlignment="Stretch" d:LayoutOverrides="Height" Flyout="{StaticResource CamerasFlyout}" Click="CameraSwitchOpener_Click" Icon="RotateCamera" IsCompact="True" Foreground="Black"/>
         </CommandBar>
     </Page.TopAppBar>
 
@@ -51,8 +49,9 @@
             <ColumnDefinition/>
             <ColumnDefinition Width="0*"/>
         </Grid.ColumnDefinitions>
-        <Image x:Name="noiseImage" Margin="0" Stretch="UniformToFill" RequestedTheme="Dark" Opacity="0.4" Source="Assets/tvnoise.jpg"/>
-        <CaptureElement x:Name="capturePreview" Margin="0" d:IsHidden="True"/>
+        <Image x:Name="NoiseImage" Margin="0" Stretch="UniformToFill" RequestedTheme="Dark" Opacity="0.4" Source="Assets/tvnoise.jpg"/>
+        <CaptureElement x:Name="CapturePreview" Margin="0" d:IsHidden="True"/>
+        <ProgressRing HorizontalAlignment="Center" Margin="0" VerticalAlignment="Center" Width="30" Height="35" Canvas.ZIndex="100"/>
 
     </Grid>
 </Page>

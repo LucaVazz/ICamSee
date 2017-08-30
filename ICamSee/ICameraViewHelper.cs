@@ -1,8 +1,6 @@
 ﻿using System.Threading.Tasks;
 using Windows.Devices.Enumeration;
-using Windows.Foundation;
 using Windows.Media.Capture;
-using Windows.Media.MediaProperties;
 using Windows.Storage.Streams;
 
 
@@ -11,23 +9,34 @@ namespace ICamSee
     interface ICameraViewHelper
     {
         MediaCapture MediaCapture { get; }
-        Task InitializeAsync(DeviceInformation videoDevice);
-        Task DeactivateAsync();
+        Task Initialize(DeviceInformation deviceToUse);
+        Task StartView();
+        Task ReInitialize();
+        Task Deinitialize();
+        Task StopView();
 
         Task SetViewRotationAsync(int rotationDeg);
 
 
-        Task<InMemoryRandomAccessStream> CaptureCurrentImageToStreamAsync();
-
-
         bool CanAutoFocus { get; }
         bool IsAutoFocusing { get; }
-        void SetAutoFocus(bool state);
+        double FocusStep { get; }
+        double FocusMin { get; }
+        double FocusMax { get; }
+
+        bool SetAutoFocus(bool state);
+        bool ToggleAutoFocus();
 
         bool CanFocus { get; }
-        void SetFocus(uint value);
+        bool SetFocus(uint value);
 
         bool CanZoom { get; }
-        void SetZoom(uint value);
+        double ZoomStep { get; }
+        double ZoomMin { get; }
+        double ZoomMax { get; }
+
+        bool SetZoom(double value);
+        bool ChangeZoomByOneStep(int stepMultiplier = 1);
+
     }
 }

@@ -1,197 +1,186 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Windows.Devices.Enumeration;
-using Windows.Foundation;
 using Windows.Media.Capture;
 using Windows.Media.Devices;
-using Windows.Media.MediaProperties;
 using Windows.Storage.Streams;
+using Windows.UI.Xaml.Controls;
 
-namespace ICamSee
-{
-    class CameraViewHelper : ICameraViewHelper
-    {
-        private DeviceInformation VideoDevice;
-        private bool IsExternalCamera;
-        private bool IsMirroringPreview;
-
+namespace ICamSee {
+    class CameraViewHelper : ICameraViewHelper {
         public MediaCapture MediaCapture { get; private set; }
+        DeviceInformation CurrentDevice;
+        bool IsMirroringPreview;
 
-        public bool CanAutoFocus { get; private set; }
-        public bool IsAutoFocusing { get; private set; }
-        public bool CanFocus { get; private set; }
-        public bool CanZoom { get; private set; }
-
-
-
-        /// <summary>
-        /// Prepares all components needed for the CameraView for use.
-        /// Can throw UnauthorizedAccessException
-        /// </summary>
-        /// <param name="videoDevice">The VideoDevice which should be used for this View</param>
-        /// <returns></returns>
-        public async Task InitializeAsync(DeviceInformation videoDevice) {
-            if(videoDevice == null) {
-                throw new ArgumentNullException("The passed videoDevice is invalid!");
+        public async Task Initialize(DeviceInformation deviceToUse)
+        {
+            if (MediaCapture == null) {
+                // Create MediaCapture and initialize it:
+                MediaCapture = new MediaCapture();
             }
 
-            if (MediaCapture != null) {
-                throw new InvalidOperationException("The CameraView is already initilaized!");
+            var mediaInitSettings = new MediaCaptureInitializationSettings {
+                VideoDeviceId = deviceToUse.Id
+            };
+
+            await MediaCapture.InitializeAsync(mediaInitSettings);
+               
+            // Set if the cameras live-feed should get mirrored:
+            // Figure out where the camera is located
+            if (  deviceToUse.EnclosureLocation == null
+                || deviceToUse.EnclosureLocation.Panel == Windows.Devices.Enumeration.Panel.Unknown
+            ) {
+                // It's probably external if we can't get location-info
+                IsMirroringPreview = false;
+            } else {
+                // Only mirror the preview if the camera is on the front panel
+                IsMirroringPreview = (deviceToUse.EnclosureLocation.Panel == Windows.Devices.Enumeration.Panel.Front);
             }
 
-            MediaCapture = new MediaCapture();
+            CurrentDevice = deviceToUse;
+        }
 
-            MediaCaptureInitializationSettings mediaInitSettings = 
-                new MediaCaptureInitializationSettings { VideoDeviceId = videoDevice.Id };
-            await MediaCapture.InitializeAsync(mediaInitSettings); // can throw UnauthorizedAccessException
-
-            IsExternalCamera = (videoDevice.EnclosureLocation == null);
-            IsMirroringPreview = (
-                !IsExternalCamera
-                && videoDevice.EnclosureLocation.Panel == Panel.Front
-            );
-
-            MediaCapture.SetPreviewMirroring(IsMirroringPreview);
-
-            MediaDeviceControlCapabilities FocusCapabilities =
-                MediaCapture.VideoDeviceController.Focus.Capabilities;
-            CanFocus       = FocusCapabilities.Supported;
-            CanAutoFocus   = MediaCapture.VideoDeviceController.Focus.Capabilities.AutoModeSupported;
-
-            MediaDeviceControlCapabilities ZoomCapabilities =
-                MediaCapture.VideoDeviceController.Zoom.Capabilities;
-            CanZoom = ZoomCapabilities.Supported;
-
+        public async Task StartView()
+        {
             await MediaCapture.StartPreviewAsync();
         }
 
-        /// <summary>
-        /// Frees up Resources for the View.
-        /// Needs to be called after the view was stopped.
-        /// </summary>
-        public async Task DeactivateAsync() {
-            await MediaCapture.StopPreviewAsync();
-
-            MediaCapture.Dispose();
-        }
-
-        /// <summary>
-        /// Sets the Rotation of the Preview.
-        /// </summary>
-        /// <param name="rotationDegrees">A Measeure in Degrees between 0 and 360</param>
-        /// <returns></returns>
-        public async Task SetViewRotationAsync(int rotationDegrees)
+        public async Task ReInitialize()
         {
-            if (rotationDegrees < 0 || rotationDegrees > 360)
-            {
-                throw new ArgumentOutOfRangeException("rotationDegress");
-            }
-
-            if (IsExternalCamera)
-            {
-                return;                 /* exteranl cameras don't care about the device's rotation */
-            }
-
-            // rotation needs to be inverted if the preview is mirrored
-            if (IsMirroringPreview)
-            {
-                rotationDegrees = (360 - rotationDegrees) % 360;
-            }
-
-            var StreamProperties = MediaCapture.VideoDeviceController
-                .GetMediaStreamProperties(MediaStreamType.VideoPreview);
-            Guid rotationKey = new Guid("C380465D-2271-428C-9B83-ECEA3B4A85C1");
-
-            StreamProperties.Properties.Add(rotationKey, rotationDegrees);
-            await MediaCapture.SetEncodingPropertiesAsync(MediaStreamType.VideoPreview,
-                StreamProperties, null);
+            await Initialize(CurrentDevice);
         }
 
+        public async Task Deinitialize()
+        {
+            if (MediaCapture != null) {
+                MediaCapture.Dispose();
+                MediaCapture = null;
+            }
+        }
+
+        public async Task StopView()
+        {
+            await MediaCapture.StopPreviewAsync();
+        }
+
+        #region Capabilities
+        public bool CanAutoFocus {
+            get {
+                return MediaCapture.VideoDeviceController.Focus.Capabilities.AutoModeSupported;
+            }
+        }
+
+        public bool CanFocus {
+            get {
+                return MediaCapture.VideoDeviceController.Focus.Capabilities.Supported;
+            }
+        }
+
+        public double FocusStep { get { return FocusCapabilities.Step; } }
+
+        public double FocusMin { get { return FocusCapabilities.Min; } }
+
+        public double FocusMax { get { return FocusCapabilities.Max; } }
+
+        MediaDeviceControlCapabilities FocusCapabilities {
+            get {
+                return MediaCapture.VideoDeviceController.Focus.Capabilities;
+            }
+        }
+
+        public bool CanZoom {
+            get {
+                return ZoomCapabilities.Supported;
+            }
+        }
+
+        public double ZoomStep { get { return ZoomCapabilities.Step; } }
+
+        public double ZoomMin { get { return ZoomCapabilities.Min; } }
+
+        public double ZoomMax { get { return ZoomCapabilities.Max; } }
+
+        MediaDeviceControlCapabilities ZoomCapabilities {
+            get {
+                return MediaCapture.VideoDeviceController.Zoom.Capabilities;
+            }
+        }
+        #endregion
+
+        #region Public State
+        public bool IsAutoFocusing {
+            get {
+                bool isAuto;
+                if (MediaCapture.VideoDeviceController.Focus.TryGetAuto(out isAuto)) {
+                    return isAuto;
+                } else {
+                    return false;
+                }
+            }
+        }
+        #endregion
+
+        #region Change Video Device Properties
+        public bool ToggleAutoFocus()
+        {
+            bool isAutoFocusenabled = false;
+            if (MediaCapture.VideoDeviceController.Focus.TryGetAuto(out isAutoFocusenabled)) {
+                return SetAutoFocus(!isAutoFocusenabled);
+            } else {
+                return false;
+            }
+        }
+
+        public bool SetAutoFocus(bool state)
+        {
+            return MediaCapture.VideoDeviceController.Focus.TrySetAuto(state);
+        }
+
+        public bool SetFocus(uint value)
+        {
+            throw new NotImplementedException();  // TODO: Implement SetFocus for a slider
+        }
+
+        public async Task SetViewRotationAsync(int rotationDeg)
+        {
+            var props = MediaCapture.VideoDeviceController.GetMediaStreamProperties(MediaStreamType.VideoPreview);
+
+            var rotationKey = new Guid("C380465D-2271-428C-9B83-ECEA3B4A85C1");
+            props.Properties[rotationKey] = rotationDeg;
+
+            await MediaCapture.SetEncodingPropertiesAsync(MediaStreamType.VideoPreview, props, null);
+        }
 
         /// <summary>
-        /// Captures the Image currently shown by the Preview
+        /// Triggers the video device to change the zoom to the specified step.
         /// </summary>
-        /// <returns>A Stream with the capture encoded as PNG</returns>
-        public async Task<InMemoryRandomAccessStream> CaptureCurrentImageToStreamAsync() {
-            InMemoryRandomAccessStream accessStream = new InMemoryRandomAccessStream();
-            ImageEncodingProperties properties = ImageEncodingProperties.CreatePng();
-
-            await MediaCapture.CapturePhotoToStreamAsync(properties, accessStream);
-            return accessStream;
-        }
-
-
-        /// <summary>
-        /// Sets the state of automatic focusing.
-        /// If the Camera doesn't support AutoFocus or an error occurs, an InvalidOperationException will be thrown.
-        /// </summary>
-        /// <param name="state"></param>
-        public void SetAutoFocus(bool state) {
-            if(!CanAutoFocus) {
-                throw new InvalidOperationException("This VideoDevice doesn't support AutoFocus!");
-            }
-
-            bool setWasSuccesfull = MediaCapture.VideoDeviceController.Focus.TrySetAuto(state);
-
-            if (!setWasSuccesfull) {
-                throw new InvalidOperationException("An error occured while trying to set AutoFocuse");
+        /// <returns>Indicates if the zoom-level was succesfully changed</returns>
+        public bool SetZoom(double value)
+        {
+            if (value > ZoomMax) {
+                return false;
+            } else if (value < ZoomMin) {
+                return false;
+            } else {
+                return MediaCapture.VideoDeviceController.Zoom.TrySetValue(value);
             }
         }
 
         /// <summary>
-        /// Sets the Focus-Length of the Camera if supported.
-        /// If the camera doesn't support the setting of focus or if an error occurs, an InvalidOperationException 
-        /// will be thrown.
+        /// Triggers the video device to change the zoom by one step.
         /// </summary>
-        /// <param name="value">The Focus-Length, abstracted to a Range between 0 and 100</param>
-        public void SetFocus(uint value) {
-            if (!CanFocus) {
-                throw new InvalidOperationException("This VideoDevice doesn't support setting the Focus!");
-            }
-
-            if (value > 100) {
-                throw new ArgumentOutOfRangeException("value");
-            }
-
-            MediaDeviceControlCapabilities focusCapabilities = MediaCapture.VideoDeviceController.Focus.Capabilities;
-            double realStep = focusCapabilities.Step * (int)(
-                (focusCapabilities.Max - focusCapabilities.Min) / 100 / focusCapabilities.Step
-            );
-            double newValue = focusCapabilities.Min + realStep * value;
-            bool setWasSuccesfull = MediaCapture.VideoDeviceController.Focus.TrySetValue(newValue);
-
-            if (!setWasSuccesfull) {
-                throw new InvalidOperationException("An error occured while trying to set the value of the Focus!");
+        /// <returns>Indicates if the zoom-level was succesfully changed</returns>
+        public bool ChangeZoomByOneStep(int stepMultiplier = 1)
+        {
+            double current;
+            if (MediaCapture.VideoDeviceController.Zoom.TryGetValue(out current)) {
+                double next = current + ZoomStep * stepMultiplier;
+                return SetZoom(next);
+            } else {
+                return false;
             }
         }
-
-        /// <summary>
-        /// Sets the Zoom-Level of the Camera if supported.
-        /// If the camera doesn't support setting a Zoom-Level or if an error occurs, an InvalidOperationException 
-        /// will be thrown.
-        /// </summary>
-        /// <param name="value">The Zoom Level in a Range between 0 and 100</param>
-        public void SetZoom(uint value) {
-            if (!CanZoom) {
-                throw new InvalidOperationException("This VideoDevice doesn't support setting the Zoom!");
-            }
-
-            if(value > 100) {
-                throw new ArgumentOutOfRangeException("value");
-            }
-
-            MediaDeviceControlCapabilities zoomCapabilities = MediaCapture.VideoDeviceController.Zoom.Capabilities;
-            double realStep = zoomCapabilities.Step * (int)(
-                (zoomCapabilities.Max - zoomCapabilities.Min) / 100 / zoomCapabilities.Step
-            );
-            double newValue = zoomCapabilities.Min + realStep * value;
-            bool setWasSuccesfull = MediaCapture.VideoDeviceController.Zoom.TrySetValue(newValue);
-
-            if (!setWasSuccesfull)
-            {
-                throw new InvalidOperationException("An error occured while trying to set the value of the Zoom!");
-            }
-        }
+        #endregion
 
     }
 }
